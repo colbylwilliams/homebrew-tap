@@ -9,7 +9,7 @@ independently established.
 checksums. Installation becomes available only after the first public GHCR
 release is validated and its generated `Formula/co.rb` and `releases/latest.txt`
 are merged. Before then, Homebrew cannot find `co` and the installer fails on the
-missing release index. GitHub Pages must also be enabled before its URL works.
+missing release index.
 
 ## Install
 
@@ -19,26 +19,24 @@ Once bootstrap is complete:
 brew install colbylwilliams/tap/co
 ```
 
-Without Homebrew, download and run the installer from the stable public URL:
+Without Homebrew, download and run the installer from its canonical public URL:
 
 ```sh
 (
   installer="$(mktemp)" || exit 1
   trap 'rm -f "$installer"' 0
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
-    https://colbylwilliams.github.io/homebrew-tap/install.sh \
+    https://raw.githubusercontent.com/colbylwilliams/homebrew-tap/main/install.sh \
     -o "$installer" &&
   sh "$installer"
 )
 ```
 
-The download-first form does not execute an incomplete script or hide a failed
-script download behind a pipe. The file can also be inspected before running.
-While Pages is being enabled, use this public raw URL in the same command:
-
-```text
-https://raw.githubusercontent.com/colbylwilliams/homebrew-tap/main/install.sh
-```
+This is the standalone installer, not a Homebrew bootstrap script. A custom
+short-link can redirect to this raw GitHub URL; no short-link has been configured
+yet, and GitHub Pages is not required. The download-first form does not execute
+an incomplete script or hide a failed script download behind a pipe. The file
+can also be inspected before running.
 
 The default destination is `$HOME/.local/bin/co`, without `sudo`. Add
 `$HOME/.local/bin` to your `PATH` if necessary. To choose another **absolute**
@@ -72,27 +70,24 @@ binary users should use Homebrew upgrades or rerun this installer instead.
 ## One-time owner setup
 
 1. Merge this setup PR in the public `colbylwilliams/homebrew-tap` repository.
-2. In **Settings > Pages**, select **Deploy from a branch**, branch `main`,
-   folder `/ (root)`. `.nojekyll` allows the plain shell file to be served without
-   processing. Wait for the Pages deployment to finish. No custom domain or
-   external short-link service is required.
-3. In **Settings > Actions > General > Workflow permissions**, enable
+2. In **Settings > Actions > General > Workflow permissions**, enable
    **Allow GitHub Actions to create and approve pull requests**. The workflow
    requests its own `contents: write` and `pull-requests: write` permissions; it
    never approves or merges. Repository/organization policy must permit these.
-4. Publish the first stable `vMAJOR.MINOR.PATCH` from the source publishing
+3. Publish the first stable `vMAJOR.MINOR.PATCH` from the source publishing
    workflow. Change **only** the GHCR package
    `ghcr.io/colbylwilliams/co/cli` to **Public** in its package settings.
    The source repository can remain private. Anonymous reads are deliberately
    required; a token with private access must not mask a visibility mistake.
-5. Run **Actions > Sync public release > Run workflow**. Review and merge the
+4. Run **Actions > Sync public release > Run workflow**. Review and merge the
    resulting update PR containing `Formula/co.rb` and `releases/latest.txt`.
    Then smoke-test Homebrew and the public installer on real supported machines.
 
 These settings and the first production release are owner actions; this repository
-does not change package visibility, enable Pages, publish binaries, or merge PRs.
-The raw installer URL works as soon as this setup is on `main`; installation still
-needs the generated release index and a public package.
+does not change package visibility, publish binaries, or merge PRs. The canonical
+raw installer URL works as soon as this setup is on `main`; installation still
+needs the generated release index and a public package. No Pages deployment is
+needed.
 
 ## How release sync works
 
@@ -142,7 +137,7 @@ linux arm64 <archive SHA256> <archive byte count>
 ```
 
 The shell installer always reads the index from this public repository's `main`
-branch, even when the installer itself is served through Pages. It validates
+branch, even when the installer is reached through a short-link. It validates
 every row, gets an anonymous GHCR pull token, and downloads only the selected
 immutable blob over HTTPS. It verifies its byte count and SHA256, rejects
 unexpected archive names and nonregular entries, and streams `co` into a private
