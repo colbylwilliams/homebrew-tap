@@ -19,24 +19,35 @@ Once bootstrap is complete:
 brew install colbylwilliams/tap/co
 ```
 
-Without Homebrew, download and run the installer from its canonical public URL:
+Without Homebrew, install through the public short-link:
+
+```sh
+curl -fsSL https://gh.io/co-install | sh
+```
+
+This is the standalone installer, not a Homebrew bootstrap script. The short-link
+redirects to the canonical raw GitHub endpoint below; GitHub Pages is not required:
+
+```text
+https://raw.githubusercontent.com/colbylwilliams/homebrew-tap/main/install.sh
+```
+
+To download the complete script before running it:
 
 ```sh
 (
   installer="$(mktemp)" || exit 1
   trap 'rm -f "$installer"' 0
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
-    https://raw.githubusercontent.com/colbylwilliams/homebrew-tap/main/install.sh \
+    https://gh.io/co-install \
     -o "$installer" &&
   sh "$installer"
 )
 ```
 
-This is the standalone installer, not a Homebrew bootstrap script. A custom
-short-link can redirect to this raw GitHub URL; no short-link has been configured
-yet, and GitHub Pages is not required. The download-first form does not execute
-an incomplete script or hide a failed script download behind a pipe. The file
-can also be inspected before running.
+The download-first form does not execute an incomplete script or hide a failed
+script download behind a pipe. The file can also be inspected before running,
+and the raw URL can be used directly in either command.
 
 The default destination is `$HOME/.local/bin/co`, without `sudo`. Add
 `$HOME/.local/bin` to your `PATH` if necessary. To choose another **absolute**
@@ -100,7 +111,7 @@ The expected producer contract is:
 
 | Item | Contract |
 | --- | --- |
-| Tags | Stable immutable `vMAJOR.MINOR.PATCH`; monotonically advancing `latest` |
+| Tags | Stable immutable `vMAJOR.MINOR.PATCH` (at most 64 characters including `v`); monotonically advancing `latest` |
 | Manifest | One OCI 1.1 image manifest, `application/vnd.oci.image.manifest.v1+json` |
 | Artifact type | `application/vnd.co.cli.v1` |
 | Config | OCI empty config, `application/vnd.oci.empty.v1+json`, bytes `{}` |
