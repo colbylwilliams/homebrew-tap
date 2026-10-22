@@ -15,6 +15,33 @@ from fixtures import FixtureRegistry, ROOT, archive, sync
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_bare_zero_major_tag_preserves_release_bytes(self):
+        registry = FixtureRegistry("0.1.0", distinct=True)
+        document = copy.deepcopy(registry.document)
+        blobs = registry.blobs.copy()
+        raw = json.dumps(document, separators=(",", ":")).encode()
+
+        release = sync.fetch_release(registry)
+
+        self.assertEqual([url for url in registry.requests if "/manifests/" in url], [
+            f"{sync.REGISTRY}/manifests/latest",
+            f"{sync.REGISTRY}/manifests/0.1.0",
+        ])
+        layers = {layer["annotations"]["org.opencontainers.image.title"]: layer
+                  for layer in document["layers"]}
+        self.assertEqual(release, ("0.1.0", "a" * 40, sync.digest(raw), layers))
+        self.assertEqual(registry.document, document)
+        self.assertEqual(registry.document["annotations"]["org.opencontainers.image.version"], "v0.1.0")
+        self.assertEqual(registry.blobs, blobs)
+        expected_rows = ["co-release-v1", "version 0.1.0",
+                         f"manifest {sync.digest(raw)}", f"revision {'a' * 40}"]
+        for os_name, arch in sync.PLATFORMS:
+            layer = layers[f"co_0.1.0_{os_name}_{arch}.tar.gz"]
+            data = blobs[layer["digest"]]
+            expected_rows.append(f"{os_name} {arch} {sync.digest(data)[7:]} {len(data)}")
+        self.assertEqual(sync.render_index(release), "\n".join(expected_rows) + "\n")
+        self.assertIn('  version "0.1.0"\n', sync.render_formula(release))
+
     def test_valid_release_all_platforms_and_formula_behavior(self):
         registry = FixtureRegistry(distinct=True)
         registry.authenticate()
@@ -66,21 +93,38 @@ class ReleaseTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_idempotence_and_monotonic_immutable_updates(self):
-        first = sync.fetch_release(FixtureRegistry())
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            sync.write_release(root, first)
-            sync.write_release(root, first)
-            before = (root / "releases/latest.txt").read_bytes()
-            for release in [
-                sync.fetch_release(FixtureRegistry("1.2.2")),
-                (first[0], "b" * 40, first[2], first[3]),
-            ]:
-                with self.assertRaises(sync.ReleaseError):
-                    sync.write_release(root, release)
-                self.assertEqual((root / "releases/latest.txt").read_bytes(), before)
-            sync.write_release(root, sync.fetch_release(FixtureRegistry("1.3.0")))
-            self.assertIn("version 1.3.0", (root / "releases/latest.txt").read_text())
+        for version, older, newer in (("0.1.0", "0.0.9", "0.1.1"), ("1.2.3", "1.2.2", "1.3.0")):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
+                first = sync.fetch_release(FixtureRegistry(version))
+                root = Path(directory)
+                sync.write_release(root, first)
+                paths = (root / "releases/latest.txt", root / "Formula/co.rb")
+                before = [path.read_bytes() for path in paths]
+                sync.write_release(root, sync.fetch_release(FixtureRegistry(version)))
+                self.assertEqual([path.read_bytes() for path in paths], before)
+                for release in [
+                    sync.fetch_release(FixtureRegistry(older)),
+                    (first[0], "b" * 40, first[2], first[3]),
+                    sync.fetch_release(FixtureRegistry(version, distinct=True)),
+                ]:
+                    with self.assertRaises(sync.ReleaseError):
+                        sync.write_release(root, release)
+                    self.assertEqual([path.read_bytes() for path in paths], before)
+                sync.write_release(root, sync.fetch_release(FixtureRegistry(newer)))
+                self.assertIn(f"version {newer}", paths[0].read_text())
+
+    def test_malformed_version_annotations_are_rejected_before_tag_lookup(self):
+        for version in (
+            None, 1, {}, ["v0.1.0"], "", "latest", "0.1.0", "v0", "v0.1", "vv0.1.0",
+            "v00.1.0", "v0.01.0", "v0.1.00", "v0.1.0-rc.1", "v0.1.0+build.1",
+            "v0.1.0\n", "v0.1.0/../latest", "v" + "1" * 60 + ".0.0",
+        ):
+            with self.subTest(version=version):
+                registry = FixtureRegistry("0.1.0")
+                registry.document["annotations"]["org.opencontainers.image.version"] = version
+                with self.assertRaisesRegex(sync.ReleaseError, "stable vMAJOR.MINOR.PATCH"):
+                    sync.fetch_release(registry)
+                self.assertEqual(registry.requests, [f"{sync.REGISTRY}/manifests/latest"])
 
     def test_malformed_manifest_metadata(self):
         mutations = [
@@ -108,10 +152,13 @@ class ReleaseTests(unittest.TestCase):
                     sync.fetch_release(registry)
 
     def test_tag_mismatch(self):
-        registry = FixtureRegistry()
-        registry.tag_override = b"{}"
-        with self.assertRaisesRegex(sync.ReleaseError, "Version tag"):
-            sync.fetch_release(registry)
+        for version in ("0.1.0", "1.2.3"):
+            registry = FixtureRegistry(version)
+            for content in (b"{}", json.dumps(registry.document, indent=2).encode()):
+                with self.subTest(version=version, content=content[:30]):
+                    registry.tag_override = content
+                    with self.assertRaisesRegex(sync.ReleaseError, "Version tag"):
+                        sync.fetch_release(registry)
 
     def test_blob_size_and_digest_mismatch(self):
         for altered in (b"x", b"x" * len(archive())):

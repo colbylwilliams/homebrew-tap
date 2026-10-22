@@ -111,18 +111,28 @@ The expected producer contract is:
 
 | Item | Contract |
 | --- | --- |
-| Tags | Stable immutable `vMAJOR.MINOR.PATCH` (at most 64 characters including `v`); monotonically advancing `latest` |
+| Registry tags | Stable immutable `MAJOR.MINOR.PATCH` without `v`; monotonically advancing `MAJOR`, `MAJOR.MINOR`, and `latest` aliases |
+| Source Git tag / workflow input | `vMAJOR.MINOR.PATCH` (unchanged) |
 | Manifest | One OCI 1.1 image manifest, `application/vnd.oci.image.manifest.v1+json` |
 | Artifact type | `application/vnd.co.cli.v1` |
 | Config | OCI empty config, `application/vnd.oci.empty.v1+json`, bytes `{}` |
-| Annotations | `org.opencontainers.image.version=vX.Y.Z`, `org.opencontainers.image.revision=<40-character commit SHA>` |
+| Annotations | `org.opencontainers.image.version=vX.Y.Z` (at most 64 characters including `v`), `org.opencontainers.image.revision=<40-character commit SHA>` |
 | Archives | `co_X.Y.Z_{darwin,linux}_{amd64,arm64}.tar.gz`, media type `application/gzip` |
 | Checksums | `SHA256SUMS`, media type `text/plain`, four SHA256 filename entries |
 | Layer names | `org.opencontainers.image.title` annotations |
 | Archive members | Exactly root `co` (regular file, mode `0755`) and `LICENSE` (regular file, mode `0644`) |
 
-The generator checks that `latest` and its version tag have the same manifest
-digest; validates all descriptors; downloads and checks every layer; compares
+For `v0.1.0`, the immutable registry tag is `0.1.0`; aliases `0`, `0.1`, and
+`latest` initially point to that exact manifest. Each alias advances independently:
+`MAJOR` tracks the newest release within that major, `MAJOR.MINOR` within that
+minor, and `latest` overall. Publishing an older release cannot roll an alias
+backwards. Only registry tags omit `v`: the OCI version annotation and binary
+`--version` output retain `vX.Y.Z`.
+
+The generator validates the `vX.Y.Z` annotation, then checks that `latest` and
+the corresponding unprefixed `X.Y.Z` tag have the same manifest digest. It does
+not resolve the major/minor aliases or fall back to a prefixed registry tag.
+It validates all descriptors; downloads and checks every layer; compares
 `SHA256SUMS` with the archive digests; and checks archive contents without
 extracting paths. Archives are limited to 128 MiB compressed and individual
 members to 256 MiB. Downgrades and changed content at a previously synced version
@@ -196,7 +206,9 @@ TEST_WITH_HOMEBREW=1 python3 -m unittest discover -s tests -v
 Fixtures exercise all supported platforms, malformed metadata and tokens, failed
 downloads, digest/size mismatches, unsafe archives, installation-failure
 preservation, release monotonicity, TLS redirects, and generated formula
-selection/install/version-test behavior. Tests mock the transport; they neither
+selection/install/version-test behavior. Strict tag fixtures verify the bare
+`0.1.0` lookup, unchanged manifest/blob bytes and eight-line index, byte-exact
+manifest equality, and identical retry output. Tests mock the transport; they neither
 publish a release nor disable production TLS. CI runs them on macOS and Linux.
 Real package download and installation remain first-release smoke tests, not
 claims made by the fixture suite.

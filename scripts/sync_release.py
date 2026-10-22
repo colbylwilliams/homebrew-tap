@@ -148,10 +148,11 @@ def fetch_release(registry):
     tag = annotations.get("org.opencontainers.image.version", "")
     require(isinstance(tag, str) and len(tag) <= 64 and tag.startswith("v") and VERSION.fullmatch(tag[1:]),
             "Release must have a stable vMAJOR.MINOR.PATCH version")
+    version = tag[1:]
     revision = annotations.get("org.opencontainers.image.revision", "")
     require(isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision),
             "Release must have a full source commit revision")
-    require(digest(registry.manifest(tag)) == digest(raw), "Version tag does not match latest manifest")
+    require(digest(registry.manifest(version)) == digest(raw), "Version tag does not match latest manifest")
     config = manifest.get("config")
     validate_descriptor(config, "application/vnd.oci.empty.v1+json", 2)
     require(config["size"] == 2 and config["digest"] == digest(b"{}"), "Expected OCI empty config")
@@ -165,7 +166,6 @@ def fetch_release(registry):
         name = labels.get("org.opencontainers.image.title")
         require(isinstance(name, str) and name not in by_name, "Missing or duplicate layer title")
         by_name[name] = layer
-    version = tag[1:]
     names = [f"co_{version}_{os}_{arch}.tar.gz" for os, arch in PLATFORMS]
     require(set(by_name) == set(names + ["SHA256SUMS"]), "Unexpected release layer names")
     validate_descriptor(by_name["SHA256SUMS"], "text/plain", 4096)
