@@ -77,7 +77,10 @@ class FixtureRegistry(sync.Registry):
         if url.startswith("https://ghcr.io/token?"):
             data = self.token_response
         elif "/manifests/" in url:
-            if not url.endswith("/latest") and self.tag_override is not None:
+            reference = url.rsplit("/", 1)[1]
+            sync.require(reference in ("latest", self.version),
+                         f"Unknown fixture manifest reference: {reference}")
+            if reference == self.version and self.tag_override is not None:
                 data = self.tag_override
             else:
                 data = json.dumps(self.document, separators=(",", ":")).encode()
