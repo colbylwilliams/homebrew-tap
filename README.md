@@ -71,7 +71,7 @@ brew upgrade colbylwilliams/tap/co
 ```
 
 For shell installations, rerun the installer to replace the executable with the
-latest **reviewed tap release**. Failed downloads, verification, extraction, or
+latest **verified tap release**. Failed downloads, verification, extraction, or
 staging leave the existing executable intact. The final replacement is an atomic
 rename on the destination filesystem. Remove that executable to uninstall.
 
@@ -80,32 +80,57 @@ binary users should use Homebrew upgrades or rerun this installer instead.
 
 ## One-time owner setup
 
-1. Merge this setup PR in the public `colbylwilliams/homebrew-tap` repository.
+1. Review and merge the automatic-sync setup in the public
+   `colbylwilliams/homebrew-tap` repository **before** enabling source dispatch.
+   This authorizes automatic publication of verified generated release metadata
+   only, not source, installer, workflow, or other code PRs.
 2. In **Settings > Actions > General > Workflow permissions**, enable
    **Allow GitHub Actions to create and approve pull requests**. The workflow
-   requests its own `contents: write` and `pull-requests: write` permissions; it
-   never approves or merges. Repository/organization policy must permit these.
+   requests its own `contents: write` and `pull-requests: write` permissions.
+   It never approves PRs. Repository/organization policy must permit these
+   permissions and the workflow's fast-forward merge-commit update of `main`.
+   Rules requiring a PR-merge API call, reviews, or other unsatisfied checks
+   can block publication; the workflow fails rather than bypassing them.
 3. Publish the first stable `vMAJOR.MINOR.PATCH` from the source publishing
    workflow. Change **only** the GHCR package
    `ghcr.io/colbylwilliams/co/cli` to **Public** in its package settings.
    The source repository can remain private. Anonymous reads are deliberately
    required; a token with private access must not mask a visibility mistake.
-4. Run **Actions > Sync public release > Run workflow**. Review and merge the
-   resulting update PR containing `Formula/co.rb` and `releases/latest.txt`.
-   Then smoke-test Homebrew and the public installer on real supported machines.
+4. In the **private source repository only**, configure `HOMEBREW_TAP_TOKEN` as a
+   fine-grained PAT scoped to this public tap with **Actions: read and write**.
+   No Contents write, Pull requests write, or private-source access is needed
+   on that token. Enable the source workflow's dispatch after successful public
+   GHCR publication. It sends:
+
+   ```http
+   POST /repos/colbylwilliams/homebrew-tap/actions/workflows/sync-release.yml/dispatches
+
+   {"ref":"main"}
+   ```
+
+   No inputs, release files, or credentials are passed to the tap. The tap
+   resolves public `latest` itself; dispatch acceptance does not mean the tap
+   has finished updating. Monitor **Sync public release** for the outcome.
+5. For bootstrap or recovery, run **Actions > Sync public release > Run
+   workflow** on `main`. It creates a visible generated update PR, validates
+   its exact commit on Linux/macOS, and automatically publishes the verified
+   two-file update. Smoke-test Homebrew and the installer on real supported
+   machines after activation.
 
 These settings and the first production release are owner actions; this repository
-does not change package visibility, publish binaries, or merge PRs. The canonical
+does not change package visibility or publish binaries. It automatically merges
+only its verified generated metadata updates. The canonical
 raw installer URL works as soon as this setup is on `main`; installation still
 needs the generated release index and a public package. No Pages deployment is
 needed.
 
 ## How release sync works
 
-`Sync public release` runs daily and manually, pulling anonymously from
+`Sync public release` runs on source dispatch immediately after publication,
+with daily and manual runs as recovery paths, pulling anonymously from
 `ghcr.io/colbylwilliams/co/cli`. It uses only its own repository's `GITHUB_TOKEN`
-to propose a reviewable update PR: no cross-repository PAT, dispatch secret, or
-private-source checkout is needed.
+to create and publish a visible generated update PR. No PAT, dispatch secret, or
+private-source checkout is stored or needed in this public repository.
 
 The expected producer contract is:
 
@@ -167,28 +192,68 @@ remote metadata or unpacks archive paths. Curl configuration and tar environment
 options cannot override its download/extraction policy. Temporary files are
 cleaned on completion and catchable signals.
 
-The index is a trust root reviewed in this public tap, not a signature: checksums
-detect changed downloads, but do not protect against a compromised publisher or
-tap maintainer. The formula and installer advance together when the update PR is
-merged, not immediately when the producer changes `latest`.
+The index is a trust root in this public tap, not a signature. Automatic sync
+explicitly trusts the public GHCR publisher to choose the next stable release;
+there is no longer a human review gate for each generated version. Checksums and
+layout checks detect changed or malformed downloads, not malicious binaries from
+a compromised publisher or tap maintainer. Source/workflow/installer code changes
+still require normal review. The formula and installer index advance together
+only after the sync's exact-head validation and publication succeed, not merely
+when the producer changes `latest`.
 
-The workflow never force-pushes or overwrites an existing update PR, including
-closed PRs. Reopen a deliberately closed update PR if it should proceed. If a
-push succeeded but PR creation failed, a rerun can reuse the branch only when
-its entire tree still matches the generated update; otherwise inspect the branch
-manually. Sync fails explicitly if no public release exists or metadata disagrees.
+One non-cancelling `sync-public-release` concurrency group covers preparation,
+Linux/macOS validation, and publication. GitHub does not guarantee dispatch
+ordering and may replace pending runs; each admitted run resolves `latest` anew.
+The generator pins a single release and
+the workflow records its base, head, and entire generated tree. It permits exactly
+`Formula/co.rb` and `releases/latest.txt`, both regular nonexecutable files, in a
+single commit on the prepared `main`. It checks the PR's repository, author, base,
+head, state, title, and recorded content before publishing.
+
+The REST PR merge endpoint can guard the head SHA but cannot compare-and-swap
+the base SHA. Instead, the workflow constructs a two-parent merge commit with
+the verified tree and prepared base, then pushes it with an explicit
+`--force-with-lease=refs/heads/main:<prepared-base>`. Despite the flag's name,
+this cannot rewrite history: the required current base is the commit's first
+parent, so the update is always a fast-forward. The lease rejects concurrent
+advances **and rewinds**, including newer releases and manual source edits.
+Candidate branch creation uses an empty expected-ref lease; existing branches
+are never pushed or overwritten. GitHub records the visible PR as merged when
+its exact head becomes reachable from `main`, and the workflow verifies this.
+
+The Git ref update and PR metadata are **not** one atomic transaction. A PR
+closed or edited after the final API check can leave the already validated head
+published while the workflow reports a PR-recording failure. Such a race cannot
+substitute changed/unvalidated branch contents. Inspect the failed run and PR;
+the workflow never rolls back a published release to hide a failure.
+
+Identical retries reuse only the exact open generated PR, or an orphaned branch
+with the exact generated tree and prepared parent after PR creation failed.
+Closed, edited, ambiguous, or stale PRs/branches fail visibly instead of being
+silently adopted, rebased, or replaced. Reopen an intentionally closed PR only
+after inspecting it; a stale base or modified candidate requires owner
+reconciliation. No-op runs leave already-published metadata untouched.
+Missing permissions, blocked pushes, failed validation, malformed responses, and
+missing merge recording are actionable failures. Sync also fails explicitly if
+no public release exists or metadata disagrees.
 Scheduled workflows in public repositories may be disabled after inactivity;
 manual dispatch remains available.
 
 PRs created using `GITHUB_TOKEN` do **not** trigger `pull_request` workflows
-automatically. Fixture checks run before the sync creates its PR; maintainers can
-also dispatch **Checks** on the update branch. This limitation is intentional
-rather than requiring a PAT.
+automatically, and token-created pushes do not trigger another push CI run.
+Sync therefore calls the reusable **Checks** workflow in the same run, checking
+out and asserting the exact generated head. Both Linux and macOS must pass,
+including real Homebrew parsing/extraction on macOS, before publication.
+The check jobs have read-only permissions; only preparation/publication jobs
+receive repository write permissions. Failed or cancelled checks cannot reach
+publication. Maintainers can still dispatch **Checks** independently, but that
+does not authorize publication or replace the same-run gate.
 
 ## Development
 
 Only the generator and tests need Python 3.9+; formula tests also need Ruby.
-No third-party Python packages are needed.
+Publication tests also need Git and use isolated local bare repositories, never
+production refs or live GitHub mutations. No third-party Python packages are needed.
 
 ```sh
 sh -n install.sh
@@ -210,6 +275,9 @@ selection/install/version-test behavior. Strict tag fixtures verify the bare
 `0.1.0` lookup, unchanged manifest/blob bytes and eight-line index, byte-exact
 manifest equality, and identical retry output. Tests mock the transport; they neither
 publish a release nor disable production TLS. CI runs them on macOS and Linux.
+Publication fixtures cover successful/no-op/retry updates, exact generated trees
+and allowlists, changed/closed PRs and branches, failed validation and permissions,
+and real Git lease rejection of concurrent main advances and rewinds.
 Real package download and installation remain first-release smoke tests, not
 claims made by the fixture suite.
 
