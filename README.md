@@ -250,8 +250,11 @@ out and asserting the exact generated head. Both Linux and macOS must pass,
 including real Homebrew parsing/extraction on macOS, before publication.
 The check jobs have read-only permissions; only preparation/publication jobs
 receive repository write permissions. Failed or cancelled checks cannot reach
-publication. Maintainers can still dispatch **Checks** independently, but that
-does not authorize publication or replace the same-run gate.
+publication. Both write-enabled jobs require the canonical, non-fork repository,
+`refs/heads/main`, and a manual/source dispatch or scheduled event at job
+admission, before checkout or authentication. The Python entrypoint also checks
+the repository and ref at runtime. Maintainers can still dispatch **Checks**
+independently, but that does not authorize publication or replace the same-run gate.
 
 ## Development
 

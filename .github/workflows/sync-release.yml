@@ -14,6 +14,11 @@ concurrency:
 
 jobs:
   sync:
+    if: >-
+      github.repository == 'colbylwilliams/homebrew-tap' &&
+      github.event.repository.fork == false &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -50,7 +55,12 @@ jobs:
 
   publish:
     needs: [sync, validate]
-    if: needs.sync.outputs.head != ''
+    if: >-
+      github.repository == 'colbylwilliams/homebrew-tap' &&
+      github.event.repository.fork == false &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') &&
+      needs.sync.outputs.head != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write

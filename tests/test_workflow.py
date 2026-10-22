@@ -25,6 +25,22 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertIsNone(events["workflow_dispatch"])
         self.assertEqual(sync["permissions"], {"contents": "read"})
 
+    def test_all_write_jobs_require_canonical_nonfork_main_and_supported_event(self):
+        jobs = workflow("sync-release.yml")["jobs"]
+        write_jobs = {name for name, job in jobs.items()
+                      if "write" in job.get("permissions", {}).values()}
+        self.assertEqual(write_jobs, {"sync", "publish"})
+        guard = (
+            "github.repository == 'colbylwilliams/homebrew-tap' && "
+            "github.event.repository.fork == false && "
+            "github.ref == 'refs/heads/main' && "
+            "(github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')"
+        )
+        for name in write_jobs:
+            with self.subTest(job=name):
+                expected = guard + (" && needs.sync.outputs.head != ''" if name == "publish" else "")
+                self.assertEqual(" ".join(jobs[name]["if"].split()), expected)
+
     def test_generated_head_validation_gates_publication_in_same_run(self):
         jobs = workflow("sync-release.yml")["jobs"]
         validate, publish = jobs["validate"], jobs["publish"]
@@ -33,8 +49,8 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertEqual(validate["with"]["ref"], "${{ needs.sync.outputs.head }}")
         self.assertEqual(validate["permissions"], {"contents": "read"})
         self.assertEqual(publish["needs"], ["sync", "validate"])
-        for job in (validate, publish):
-            self.assertEqual(job["if"], "needs.sync.outputs.head != ''")
+        self.assertEqual(validate["if"], "needs.sync.outputs.head != ''")
+        self.assertTrue(publish["if"].endswith("&& needs.sync.outputs.head != ''"))
         self.assertEqual(publish["steps"][0]["with"]["ref"], "${{ needs.sync.outputs.base }}")
         self.assertEqual(publish["steps"][-1]["env"]["VALIDATION_RESULT"],
                          "${{ needs.validate.result }}")
