@@ -220,6 +220,10 @@ advances **and rewinds**, including newer releases and manual source edits.
 Candidate branch creation uses an empty expected-ref lease; existing branches
 are never pushed or overwritten. GitHub records the visible PR as merged when
 its exact head becomes reachable from `main`, and the workflow verifies this.
+GitHub's [indirect merge recording](https://docs.github.com/en/pull-requests/reference/pull-request-merges#indirect-merges)
+does not itself enforce PR approval requirements: enforcement is at the branch
+update, not a separate PR-merge gate. Do not grant this workflow rule-bypass
+privileges. Keep the same-run validation gate even if no branch rules are set.
 
 The Git ref update and PR metadata are **not** one atomic transaction. A PR
 closed or edited after the final API check can leave the already validated head
