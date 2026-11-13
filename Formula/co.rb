@@ -2,34 +2,34 @@
 class Co < Formula
   desc "Copilot workflow command-line tool"
   homepage "https://github.com/colbylwilliams/homebrew-tap"
-  version "0.1.17"
+  version "0.1.18"
   license "MIT"
 
   on_macos do
     depends_on macos: :ventura
 
     on_arm do
-      url "https://ghcr.io/v2/colbylwilliams/co/cli/blobs/sha256:4efd28d89c38b82bfc062588c8033ecc61b5b7fbcc01442b0328b3893cc1794e",
+      url "https://ghcr.io/v2/colbylwilliams/co/cli/blobs/sha256:7781be1b534bfc6adc0ec770d9abd78aba66477bedda8b799b888281db60b75e",
           using: CurlGitHubPackagesDownloadStrategy
-      sha256 "4efd28d89c38b82bfc062588c8033ecc61b5b7fbcc01442b0328b3893cc1794e"
+      sha256 "7781be1b534bfc6adc0ec770d9abd78aba66477bedda8b799b888281db60b75e"
     end
     on_intel do
-      url "https://ghcr.io/v2/colbylwilliams/co/cli/blobs/sha256:f8b0dd9c13b4f61722e1d88e5297399ad2bdbb99d86a970a9bfca89306078df3",
+      url "https://ghcr.io/v2/colbylwilliams/co/cli/blobs/sha256:119cf84d01736169e4182e2db310b60d44e541cc6db61397ba180997d506a62f",
           using: CurlGitHubPackagesDownloadStrategy
-      sha256 "f8b0dd9c13b4f61722e1d88e5297399ad2bdbb99d86a970a9bfca89306078df3"
+      sha256 "119cf84d01736169e4182e2db310b60d44e541cc6db61397ba180997d506a62f"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://ghcr.io/v2/colbylwilliams/co/cli/blobs/sha256:5983f37e3364080712e2c58cb982984ae0aa1e31064a7e5abfbbe124726051b1",
+      url "https://ghcr.io/v2/colbylwilliams/co/cli/blobs/sha256:566768686a8ca5a40536f5290a8bff90a6db209cc2fee4ac731c1357f74c757c",
           using: CurlGitHubPackagesDownloadStrategy
-      sha256 "5983f37e3364080712e2c58cb982984ae0aa1e31064a7e5abfbbe124726051b1"
+      sha256 "566768686a8ca5a40536f5290a8bff90a6db209cc2fee4ac731c1357f74c757c"
     end
     on_intel do
-      url "https://ghcr.io/v2/colbylwilliams/co/cli/blobs/sha256:2da462662015996d3c3850e080da9d6938f79f9ccb596b735ee40ee3f23cfde4",
+      url "https://ghcr.io/v2/colbylwilliams/co/cli/blobs/sha256:acda6fa782272cb2c6ea8340d3ca097f9e599d0029d5dff8de8adbf26e4f0ba4",
           using: CurlGitHubPackagesDownloadStrategy
-      sha256 "2da462662015996d3c3850e080da9d6938f79f9ccb596b735ee40ee3f23cfde4"
+      sha256 "acda6fa782272cb2c6ea8340d3ca097f9e599d0029d5dff8de8adbf26e4f0ba4"
     end
   end
 
