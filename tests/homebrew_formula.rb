@@ -2,7 +2,7 @@ require "formulary"
 
 os, arch, path, checksum, archive, destination = ARGV
 Homebrew::SimulateSystem.with(os: os.to_sym, arch: arch.to_sym) do
-  formula = Formulary.factory(Pathname(path))
+  formula = Formulary.from_path(Pathname(path))
   resource = formula.stable.resource
   raise "wrong version" unless formula.version.to_s == "1.2.3"
   raise "wrong checksum" unless resource.checksum.hexdigest == checksum
